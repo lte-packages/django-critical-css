@@ -1,6 +1,6 @@
 from django.test import TestCase
 from django.core.management import call_command
-from django.io import StringIO
+from io import StringIO
 from .models import CriticalCSS
 
 
@@ -44,7 +44,7 @@ class ClearCriticalCSSCommandTest(TestCase):
     
     def test_command_help_text(self):
         """Test that command has proper help text"""
-        out = StringIO()
-        call_command('help', 'clear_critical_css', stdout=out)
+        from django_critical_css.management.commands.clear_critical_css import Command
         
-        self.assertIn('Remove all stored critical CSS from the database', out.getvalue())
+        command = Command()
+        self.assertEqual(command.help, 'Remove all stored critical CSS from the database')
