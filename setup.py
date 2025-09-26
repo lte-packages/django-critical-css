@@ -10,6 +10,8 @@ setup(
     include_package_data=True,
     install_requires=[
         'Django>=3.2',
+        'celery',
+        'redis',
     ],
     classifiers=[
         'Framework :: Django',
