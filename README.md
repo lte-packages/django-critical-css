@@ -1,16 +1,19 @@
-# django_critical_css
+# Django critical CSS
 
 A Django app for managing and injecting critical CSS into your templates.
 
 ## Installation
 
 ```bash
-pip install .
+pip install git+https://github.com/mikehorrocks/django-critical-css.git
 ```
 
 ## Usage
 
 Add `django_critical_css` to your `INSTALLED_APPS` in `settings.py`.
+
+
+
 
 ### Management Commands
 
