@@ -12,28 +12,22 @@ pip install .
 
 Add `django_critical_css` to your `INSTALLED_APPS` in `settings.py`.
 
-## Models
+### Management Commands
 
-This app provides the `CriticalCSSCache` model for storing critical CSS for URLs:
+#### clear_critical_css
 
-```python
-from django_critical_css.models import CriticalCSSCache
+Remove all stored critical CSS from the database. This command can be useful for cache invalidation or when you want to refresh all critical CSS data.
 
-# Example usage:
-entry = CriticalCSSCache.objects.create(
-    url="https://example.com/page",
-    css="body { background: #fff; }"
-)
+```bash
+# Interactive mode (with confirmation prompt)
+python manage.py clear_critical_css
 
-# Retrieve CSS for a URL
-css = CriticalCSSCache.objects.get(url="https://example.com/page").css
+# Non-interactive mode (skip confirmation)
+python manage.py clear_critical_css --no-confirm
 ```
 
-Model fields:
-- `url`: CharField, unique, max_length=500
-- `css`: TextField
-- `updated_at`: DateTimeField (auto-updated)
-
-## Admin
-
-You can register `CriticalCSSCache` in your `admin.py` to manage entries via the Django admin interface.
+The command will:
+- Count and display the number of critical CSS entries
+- Prompt for confirmation (unless `--no-confirm` is used)
+- Remove all entries and display the count of removed items
+- Handle the case when no entries exist gracefully
