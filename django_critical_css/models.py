@@ -6,6 +6,7 @@ class CriticalCSS(models.Model):
     
     url_pattern = models.CharField(max_length=255, unique=True, help_text="URL pattern or route name")
     css_content = models.TextField(help_text="Critical CSS content to inline")
+    source_last_modified = models.DateTimeField(null=True, blank=True, help_text="Last modified date from the source (e.g., sitemap)")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     
