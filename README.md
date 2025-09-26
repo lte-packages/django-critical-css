@@ -5,12 +5,115 @@ A Django app for managing and injecting critical CSS into your templates.
 ## Installation
 
 ```bash
-pip install git+https://github.com/mikehorrocks/django-critical-css.git
+pip install git+https://github.com/lte-packages/django-critical-css.git
 ```
 
 ## Usage
 
 Add `django_critical_css` to your `INSTALLED_APPS` in `settings.py`.
+
+## Development Setup
+
+This project uses modern Python tooling with `pyproject.toml` configuration:
+
+### Prerequisites
+
+- Python 3.8 or higher
+- Git
+
+### Setup
+
+1. **Clone the repository:**
+   ```bash
+   git clone https://github.com/lte-packages/django-critical-css.git
+   cd django-critical-css
+   ```
+
+2. **Create and activate a virtual environment:**
+   ```bash
+   python -m venv .venv
+   source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+   ```
+
+3. **Install development dependencies:**
+   ```bash
+   pip install -e ".[dev]"
+   ```
+
+4. **Install pre-commit hooks:**
+   ```bash
+   pre-commit install
+   ```
+
+### Development Commands
+
+The project includes a `Makefile` with common development tasks:
+
+```bash
+make help           # Show available commands
+make install-dev    # Install development dependencies
+make lint          # Run linting with Ruff
+make format        # Format code with Ruff
+make test          # Run tests with pytest
+make test-cov      # Run tests with coverage
+make clean         # Clean up build artifacts
+make pre-commit    # Run pre-commit hooks on all files
+```
+
+### Code Quality Tools
+
+- **Ruff**: Fast linting and formatting (replaces flake8, isort, black)
+- **MyPy**: Static type checking
+- **pytest**: Testing framework with Django integration
+- **pre-commit**: Automated code quality checks on commit
+
+### Running Tests
+
+```bash
+# Run all tests
+make test
+
+# Run tests with coverage
+make test-cov
+
+# Run specific test file
+PYTHONPATH=. DJANGO_SETTINGS_MODULE=tests.settings python -m pytest django_critical_css/tests.py -v
+```
+
+### Code Formatting and Linting
+
+The project uses Ruff for both linting and formatting:
+
+```bash
+# Check code quality
+ruff check .
+
+# Fix auto-fixable issues
+ruff check --fix .
+
+# Format code
+ruff format .
+```
+
+## Configuration
+
+All tool configurations are centralized in `pyproject.toml`:
+
+- **Ruff**: Linting and formatting rules
+- **MyPy**: Type checking configuration
+- **pytest**: Test discovery and execution settings
+- **Coverage**: Test coverage reporting
+
+## Contributing
+
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Run `make pre-commit` to check code quality
+5. Run `make test` to ensure tests pass
+6. Submit a pull request
+
+Pre-commit hooks will automatically run code formatting and basic checks when you commit.
 
 
 

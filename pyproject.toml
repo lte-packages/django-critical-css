@@ -1,0 +1,181 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "django-critical-css"
+version = "0.1.0"
+description = "A Django app for managing and injecting critical CSS into your templates"
+readme = "README.md"
+license = {text = "MIT"}
+authors = [
+    {name = "lte-packages", email = "contact@lte-packages.com"},
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Framework :: Django",
+    "Framework :: Django :: 3.2",
+    "Framework :: Django :: 4.0",
+    "Framework :: Django :: 4.1",
+    "Framework :: Django :: 4.2",
+    "Framework :: Django :: 5.0",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Internet :: WWW/HTTP :: Dynamic Content",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
+requires-python = ">=3.8"
+dependencies = [
+    "Django>=3.2",
+    "celery>=5.0",
+    "redis>=4.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "ruff>=0.1.0",
+    "mypy>=1.5.0",
+    "pytest>=7.0.0",
+    "pytest-django>=4.5.0",
+    "pytest-cov>=4.0.0",
+    "pre-commit>=3.0.0",
+    "django-stubs>=4.2.0",
+    "types-redis>=4.0.0",
+]
+test = [
+    "pytest>=7.0.0",
+    "pytest-django>=4.5.0",
+    "pytest-cov>=4.0.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/lte-packages/django-critical-css"
+Repository = "https://github.com/lte-packages/django-critical-css"
+Issues = "https://github.com/lte-packages/django-critical-css/issues"
+
+[tool.setuptools.packages.find]
+exclude = ["tests*"]
+
+[tool.setuptools.package-data]
+django_critical_css = ["templates/**/*"]
+
+# Ruff configuration
+[tool.ruff]
+line-length = 88
+target-version = "py38"
+exclude = [
+    ".bzr",
+    ".direnv",
+    ".eggs",
+    ".git",
+    ".git-rewrite",
+    ".hg",
+    ".mypy_cache",
+    ".nox",
+    ".pants.d",
+    ".pytype",
+    ".ruff_cache",
+    ".svn",
+    ".tox",
+    ".venv",
+    "__pypackages__",
+    "_build",
+    "buck-out",
+    "build",
+    "dist",
+    "node_modules",
+    "venv",
+    "migrations",
+]
+
+[tool.ruff.lint]
+select = [
+    "E",    # pycodestyle errors
+    "W",    # pycodestyle warnings
+    "F",    # pyflakes
+    "B",    # flake8-bugbear
+    "I",    # isort
+    "N",    # pep8-naming
+    "UP",   # pyupgrade
+    "S",    # bandit security
+    "C4",   # flake8-comprehensions
+    "DJ",   # flake8-django
+    "T20",  # flake8-print
+    "SIM",  # flake8-simplify
+    "RUF",  # Ruff-specific rules
+]
+ignore = [
+    "E501",  # line too long (handled by formatter)
+    "S101",  # use of assert (OK in tests)
+    "S106",  # hardcoded password (OK in tests/examples)
+    "DJ01",  # nullable CharField should have null=True
+    "T201",  # print statement (OK in management commands)
+]
+
+[tool.ruff.lint.per-file-ignores]
+"__init__.py" = ["F401"]  # Allow unused imports
+"tests/*" = ["S101", "S106", "S311"]  # Allow asserts, hardcoded passwords, and pseudo-random generators in tests
+"*/migrations/*" = ["N806", "N999"]  # Allow non-lowercase variables in migrations
+"django_critical_css/management/commands/*" = ["T201"]  # Allow print in management commands
+
+[tool.ruff.lint.isort]
+known-first-party = ["django_critical_css"]
+known-third-party = ["django", "celery", "redis"]
+
+[tool.ruff.lint.mccabe]
+max-complexity = 10
+
+# MyPy configuration
+[tool.mypy]
+python_version = "3.8"
+check_untyped_defs = true
+ignore_missing_imports = true
+warn_unused_ignores = true
+warn_redundant_casts = true
+warn_unused_configs = true
+plugins = ["mypy_django_plugin.main"]
+
+[[tool.mypy.overrides]]
+module = "django_critical_css.*"
+ignore_errors = false
+
+[tool.django-stubs]
+django_settings_module = "tests.settings"
+
+# Pytest configuration
+[tool.pytest.ini_options]
+DJANGO_SETTINGS_MODULE = "tests.settings"
+python_files = ["tests.py", "test_*.py", "*_tests.py"]
+pythonpath = ["."]
+addopts = [
+    "--tb=short",
+    "--no-migrations",
+    "--reuse-db",
+]
+
+# Coverage configuration
+[tool.coverage.run]
+source = ["django_critical_css"]
+omit = [
+    "*/migrations/*",
+    "*/tests/*",
+    "*/venv/*",
+    "setup.py",
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+    "if TYPE_CHECKING:",
+]

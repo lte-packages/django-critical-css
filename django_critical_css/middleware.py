@@ -1,8 +1,11 @@
-from django.utils.deprecation import MiddlewareMixin
-from django.core.cache import cache
 import hashlib
-from .models import CriticalCSSCache
+
+from django.core.cache import cache
+from django.utils.deprecation import MiddlewareMixin
+
+from .models import CriticalCSS
 from .tasks import enqueue_critical_css
+
 
 class CriticalCSSMiddleware(MiddlewareMixin):
     """
@@ -13,19 +16,23 @@ class CriticalCSSMiddleware(MiddlewareMixin):
 
     def process_request(self, request):
         # Skip admin, static, and API endpoints
-        if request.path.startswith("/admin") or request.path.startswith("/static") or request.path.startswith("/api"):
+        if (
+            request.path.startswith("/admin")
+            or request.path.startswith("/static")
+            or request.path.startswith("/api")
+        ):
             return
 
         url = request.build_absolute_uri()
-        cache_key = f"critical_css:{hashlib.md5(url.encode()).hexdigest()}"
+        cache_key = f"critical_css:{hashlib.sha256(url.encode()).hexdigest()}"
 
         css = cache.get(cache_key)
         if not css:
             try:
-                entry = CriticalCSSCache.objects.get(url=request.path)
-                css = entry.css
-                cache.set(cache_key, css, 3600)
-            except CriticalCSSCache.DoesNotExist:
+                entry = CriticalCSS.objects.get(url_pattern=request.path)
+                css = entry.css_content
+                cache.set(cache_key, css, 86400)  # Cache for 24 hours
+            except CriticalCSS.DoesNotExist:
                 # Queue background job — do not block request
                 enqueue_critical_css.delay(url)
 
