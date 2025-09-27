@@ -35,6 +35,130 @@ async function initializeBrowser() {
   }
 }
 
+// Helper function to fetch with retry and better error handling
+async function fetchWithRetry(url, options = {}, maxRetries = 3) {
+  const { timeout = 10000, ...fetchOptions } = options;
+
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      console.log(`Fetching ${url} (attempt ${attempt}/${maxRetries})`);
+
+      // Create AbortController for timeout
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), timeout);
+
+      const response = await fetch(url, {
+        ...fetchOptions,
+        signal: controller.signal,
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+          'Accept': 'text/css,*/*;q=0.1',
+          'Accept-Language': 'en-US,en;q=0.5',
+          'Accept-Encoding': 'gzip, deflate, br',
+          'DNT': '1',
+          'Connection': 'keep-alive',
+          'Upgrade-Insecure-Requests': '1',
+          ...fetchOptions.headers
+        }
+      });
+
+      clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      return response;
+    } catch (error) {
+      console.error(`Fetch attempt ${attempt} failed:`, error.message);
+
+      // Check if it's a network/DNS error
+      if (error.code === 'EAI_AGAIN' || error.code === 'ENOTFOUND' || error.message.includes('fetch failed')) {
+        if (attempt === maxRetries) {
+          // Provide helpful error message with suggestions
+          const suggestions = [
+            'This appears to be a DNS resolution issue within the Docker container',
+            'Try using an IP address instead of hostname',
+            'Check if the website is accessible from your host machine',
+            'Consider using the /generate-critical-css endpoint with pre-downloaded CSS instead'
+          ];
+          throw new Error(`DNS resolution failed for ${url}. Suggestions: ${suggestions.join('; ')}`);
+        }
+        // Wait longer between retries for DNS issues
+        await new Promise(resolve => setTimeout(resolve, attempt * 2000));
+      } else if (error.name === 'AbortError') {
+        throw new Error(`Request timeout: ${url} took longer than ${timeout}ms to respond`);
+      } else if (attempt === maxRetries) {
+        throw error;
+      } else {
+        // Wait before retry
+        await new Promise(resolve => setTimeout(resolve, attempt * 1000));
+      }
+    }
+  }
+}
+
+// Alternative endpoint for CSS content passed directly
+app.post('/generate-critical-css-with-content', async (req, res) => {
+  try {
+    const { url, cssContent, width = 1200, height = 800, timeout = 30000 } = req.body;
+
+    if (!url) {
+      return res.status(400).json({
+        error: 'URL is required',
+        message: 'Please provide a URL to generate critical CSS for'
+      });
+    }
+
+    if (!cssContent) {
+      return res.status(400).json({
+        error: 'CSS content is required',
+        message: 'Please provide CSS content to analyze'
+      });
+    }
+
+    console.log(`Generating critical CSS for: ${url} with provided CSS content`);
+
+    // Ensure browser is available
+    if (!browser) {
+      await initializeBrowser();
+      if (!browser) {
+        throw new Error('Browser initialization failed');
+      }
+    }
+
+    // Generate critical CSS using Playwright
+    const criticalCss = await extractCriticalCSS(url, cssContent, {
+      width: parseInt(width),
+      height: parseInt(height),
+      timeout: parseInt(timeout)
+    });
+
+    console.log(`Critical CSS generated successfully for: ${url}`);
+
+    res.json({
+      success: true,
+      url: url,
+      criticalCss: criticalCss,
+      stats: {
+        originalLength: cssContent.length,
+        criticalLength: criticalCss.length,
+        reductionPercent: Math.round((1 - criticalCss.length / cssContent.length) * 100)
+      },
+      timestamp: new Date().toISOString()
+    });
+
+  } catch (error) {
+    console.error('Error generating critical CSS:', error);
+
+    res.status(500).json({
+      error: 'Failed to generate critical CSS',
+      message: error.message,
+      timestamp: new Date().toISOString()
+    });
+  }
+});
+
 // Extract critical CSS using Playwright
 async function extractCriticalCSS(url, css, options = {}) {
   const { width = 1200, height = 800, timeout = 30000 } = options;
@@ -173,6 +297,50 @@ app.get('/health', (req, res) => {
   });
 });
 
+// Network diagnostic endpoint
+app.get('/network-test/:hostname?', async (req, res) => {
+  const { hostname = 'www.google.com' } = req.params;
+
+  try {
+    console.log(`Testing network connectivity to: ${hostname}`);
+
+    const testUrl = hostname.startsWith('http') ? hostname : `https://${hostname}`;
+    const start = Date.now();
+
+    const response = await fetchWithRetry(testUrl, {
+      timeout: 10000,
+      method: 'HEAD' // Just check if we can reach it
+    }, 2);
+
+    const duration = Date.now() - start;
+
+    res.json({
+      success: true,
+      hostname,
+      testUrl,
+      status: response.status,
+      statusText: response.statusText,
+      duration: `${duration}ms`,
+      timestamp: new Date().toISOString()
+    });
+
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      hostname,
+      error: error.message,
+      errorCode: error.code,
+      timestamp: new Date().toISOString(),
+      suggestions: [
+        'Check if the hostname is correct',
+        'Verify network connectivity',
+        'Try again in a few moments (DNS might be temporarily unavailable)',
+        'Use an IP address if the hostname cannot be resolved'
+      ]
+    });
+  }
+});
+
 // Main endpoint for generating critical CSS
 app.post('/generate-critical-css', async (req, res) => {
   try {
@@ -265,11 +433,10 @@ app.post('/generate-critical-css-from-url', async (req, res) => {
     }
 
     // Fetch CSS content from URL
-    const cssResponse = await fetch(cssUrl);
-    if (!cssResponse.ok) {
-      throw new Error(`Failed to fetch CSS from ${cssUrl}: ${cssResponse.statusText}`);
-    }
+    console.log(`Fetching CSS from: ${cssUrl}`);
+    const cssResponse = await fetchWithRetry(cssUrl, { timeout: 15000 });
     const cssContent = await cssResponse.text();
+    console.log(`Successfully fetched CSS (${cssContent.length} characters)`);
 
     // Generate critical CSS using Playwright
     const criticalCss = await extractCriticalCSS(url, cssContent, {

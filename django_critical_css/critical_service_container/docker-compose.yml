@@ -10,6 +10,14 @@ services:
       - NODE_ENV=production
       - PORT=3000
     restart: unless-stopped
+    # Use host network for DNS resolution but explicit port mapping
+    network_mode: bridge
+    dns:
+      - 8.8.8.8
+      - 1.1.1.1
+      - 208.67.222.222
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     healthcheck:
       test: ["CMD", "node", "-e", "require('http').get('http://localhost:3000/health', (res) => { process.exit(res.statusCode === 200 ? 0 : 1) }).on('error', () => process.exit(1))"]
       interval: 30s
