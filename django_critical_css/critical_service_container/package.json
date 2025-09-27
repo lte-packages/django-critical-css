@@ -1,7 +1,7 @@
 {
   "name": "critical-css-service",
   "version": "1.0.0",
-  "description": "Critical CSS generation service using Penthouse and Playwright",
+  "description": "Critical CSS generation service using Playwright",
   "main": "server.js",
   "type": "module",
   "scripts": {
@@ -10,7 +10,6 @@
   },
   "dependencies": {
     "express": "^4.18.2",
-    "penthouse": "^2.3.1",
     "playwright": "^1.55.1",
     "cors": "^2.8.5",
     "helmet": "^7.1.0"

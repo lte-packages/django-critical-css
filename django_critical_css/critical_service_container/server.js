@@ -1,7 +1,6 @@
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
-import penthouse from 'penthouse';
 import { chromium } from 'playwright';
 
 const app = express();
@@ -33,6 +32,135 @@ async function initializeBrowser() {
   } catch (error) {
     console.error('Failed to initialize browser:', error);
     console.error('Error details:', error.message);
+  }
+}
+
+// Extract critical CSS using Playwright
+async function extractCriticalCSS(url, css, options = {}) {
+  const { width = 1200, height = 800, timeout = 30000 } = options;
+
+  if (!browser) {
+    throw new Error('Browser not initialized');
+  }
+
+  const context = await browser.newContext({
+    viewport: { width, height },
+    userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+  });
+
+  const page = await context.newPage();
+
+  try {
+    // Set timeout
+    page.setDefaultTimeout(timeout);
+
+    // Navigate to the page
+    await page.goto(url, { waitUntil: 'networkidle' });
+
+    // Inject the CSS into the page
+    await page.addStyleTag({ content: css });
+
+    // Wait a bit for styles to apply
+    await page.waitForTimeout(1000);
+
+    // Extract critical CSS by analyzing which styles are used above the fold
+    const criticalCSS = await page.evaluate(({ cssContent, viewportHeight }) => {
+      // Parse CSS and find used selectors
+      const style = document.createElement('style');
+      style.textContent = cssContent;
+      document.head.appendChild(style);
+
+      const sheet = style.sheet;
+      const usedSelectors = new Set();
+      const criticalRules = [];
+
+      // Get all elements in the viewport (above the fold)
+      const elementsInViewport = Array.from(document.querySelectorAll('*')).filter(el => {
+        const rect = el.getBoundingClientRect();
+        return rect.top < viewportHeight && rect.bottom >= 0 && rect.left < window.innerWidth && rect.right >= 0;
+      });
+
+      // Check each CSS rule
+      if (sheet && sheet.cssRules) {
+        Array.from(sheet.cssRules).forEach(rule => {
+          if (rule.type === CSSRule.STYLE_RULE) {
+            try {
+              // Check if any element in viewport matches this selector
+              const matchingElements = document.querySelectorAll(rule.selectorText);
+              const hasVisibleMatch = Array.from(matchingElements).some(el =>
+                elementsInViewport.includes(el)
+              );
+
+              if (hasVisibleMatch || isAlwaysCritical(rule.selectorText)) {
+                criticalRules.push(rule.cssText);
+                usedSelectors.add(rule.selectorText);
+              }
+            } catch (e) {
+              // Some selectors might be invalid, skip them
+            }
+          } else if (rule.type === CSSRule.MEDIA_RULE) {
+            // Handle media queries for mobile-first approaches
+            const mediaText = rule.media.mediaText;
+            if (shouldIncludeMediaQuery(mediaText)) {
+              Array.from(rule.cssRules).forEach(innerRule => {
+                if (innerRule.type === CSSRule.STYLE_RULE) {
+                  try {
+                    const matchingElements = document.querySelectorAll(innerRule.selectorText);
+                    const hasVisibleMatch = Array.from(matchingElements).some(el =>
+                      elementsInViewport.includes(el)
+                    );
+
+                    if (hasVisibleMatch || isAlwaysCritical(innerRule.selectorText)) {
+                      if (!criticalRules.find(rule => rule.includes(`@media ${mediaText}`))) {
+                        criticalRules.push(`@media ${mediaText} { ${innerRule.cssText} }`);
+                      }
+                    }
+                  } catch (e) {
+                    // Skip invalid selectors
+                  }
+                }
+              });
+            }
+          }
+        });
+      }
+
+      // Helper function to determine if a selector should always be included
+      function isAlwaysCritical(selector) {
+        const criticalSelectors = [
+          'html', 'body', '*',
+          '.critical', '[critical]',
+          /\.hero/, /\.header/, /\.navbar/, /\.menu/,
+          /^h[1-6]/, /^p$/, /^a$/
+        ];
+
+        return criticalSelectors.some(critical => {
+          if (typeof critical === 'string') {
+            return selector.includes(critical);
+          } else if (critical instanceof RegExp) {
+            return critical.test(selector);
+          }
+          return false;
+        });
+      }
+
+      // Helper function to determine if media query should be included
+      function shouldIncludeMediaQuery(mediaText) {
+        // Include small screen media queries as they're often critical
+        return mediaText.includes('max-width') &&
+               (mediaText.includes('768px') || mediaText.includes('mobile') || mediaText.includes('480px'));
+      }
+
+      // Clean up
+      document.head.removeChild(style);
+
+      return criticalRules.join('\n');
+    }, { cssContent: css, viewportHeight: height });
+
+    return criticalCSS;
+
+  } finally {
+    await context.close();
   }
 }
 
@@ -75,32 +203,11 @@ app.post('/generate-critical-css', async (req, res) => {
       }
     }
 
-    // Generate critical CSS using Penthouse
-    const criticalCss = await penthouse({
-      url: url,
-      cssString: css,
+    // Generate critical CSS using Playwright
+    const criticalCss = await extractCriticalCSS(url, css, {
       width: parseInt(width),
       height: parseInt(height),
-      timeout: parseInt(timeout),
-      puppeteer: {
-        getBrowser: () => browser
-      },
-      forceInclude: [
-        // Common critical selectors that should always be included
-        '.critical',
-        '[critical]',
-        /\.hero/,
-        /\.header/,
-        /\.navbar/,
-        /\.menu/
-      ],
-      propertiesToRemove: [
-        '(-webkit-)?transform',
-        'perspective',
-        'backface-visibility'
-      ],
-      keepLargerMediaQueries: false,
-      strict: false
+      timeout: parseInt(timeout)
     });
 
     console.log(`Critical CSS generated successfully for: ${url}`);
@@ -157,31 +264,18 @@ app.post('/generate-critical-css-from-url', async (req, res) => {
       }
     }
 
-    // Generate critical CSS using Penthouse
-    const criticalCss = await penthouse({
-      url: url,
-      css: cssUrl,
+    // Fetch CSS content from URL
+    const cssResponse = await fetch(cssUrl);
+    if (!cssResponse.ok) {
+      throw new Error(`Failed to fetch CSS from ${cssUrl}: ${cssResponse.statusText}`);
+    }
+    const cssContent = await cssResponse.text();
+
+    // Generate critical CSS using Playwright
+    const criticalCss = await extractCriticalCSS(url, cssContent, {
       width: parseInt(width),
       height: parseInt(height),
-      timeout: parseInt(timeout),
-      puppeteer: {
-        getBrowser: () => browser
-      },
-      forceInclude: [
-        '.critical',
-        '[critical]',
-        /\.hero/,
-        /\.header/,
-        /\.navbar/,
-        /\.menu/
-      ],
-      propertiesToRemove: [
-        '(-webkit-)?transform',
-        'perspective',
-        'backface-visibility'
-      ],
-      keepLargerMediaQueries: false,
-      strict: false
+      timeout: parseInt(timeout)
     });
 
     console.log(`Critical CSS generated successfully for: ${url}`);
@@ -192,7 +286,9 @@ app.post('/generate-critical-css-from-url', async (req, res) => {
       cssUrl: cssUrl,
       criticalCss: criticalCss,
       stats: {
-        criticalLength: criticalCss.length
+        originalLength: cssContent.length,
+        criticalLength: criticalCss.length,
+        reductionPercent: Math.round((1 - criticalCss.length / cssContent.length) * 100)
       },
       timestamp: new Date().toISOString()
     });
