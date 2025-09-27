@@ -1,5 +1,5 @@
 # Use official Microsoft Playwright image with Node.js
-FROM mcr.microsoft.com/playwright:v1.40.0-jammy
+FROM mcr.microsoft.com/playwright:v1.55.1-jammy
 
 # Set working directory
 WORKDIR /app
@@ -11,7 +11,7 @@ ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
 COPY package*.json ./
 
 # Install Node.js dependencies
-RUN npm ci --only=production && npm cache clean --force
+RUN npm ci --omit=dev && npm cache clean --force
 
 # Copy application code
 COPY . .
