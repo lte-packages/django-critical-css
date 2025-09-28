@@ -36,6 +36,7 @@ dependencies = [
     "Django>=3.2",
     "celery>=5.0",
     "redis>=4.0",
+    "cssutils>=2.0",
 ]
 
 [project.optional-dependencies]
