@@ -158,6 +158,174 @@ app.post('/generate-critical-css-with-content', async (req, res) => {
   }
 })
 
+// Extract elements above the fold
+async function extractAboveFoldElements (url, options = {}) {
+  const { width = 1200, height = 800, timeout = 30000 } = options
+
+  if (!browser) {
+    throw new Error('Browser not initialized')
+  }
+
+  const context = await browser.newContext({
+    viewport: { width, height },
+    userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+  })
+
+  const page = await context.newPage()
+
+  try {
+    // Set timeout
+    page.setDefaultTimeout(timeout)
+
+    // Navigate to the page
+    await page.goto(url, { waitUntil: 'networkidle' })
+
+    // Wait a bit for page to fully load
+    await page.waitForTimeout(1000)
+
+    // Extract elements above the fold
+    const aboveFoldElements = await page.evaluate(({ viewportHeight }) => {
+      const elements = []
+      const allClasses = new Set()
+      const allIds = new Set()
+      const allElements = new Set()
+      const allCombinations = new Set()
+
+      // Get all visible elements
+      const allDOMElements = Array.from(document.querySelectorAll('*'))
+
+      allDOMElements.forEach(el => {
+        const rect = el.getBoundingClientRect()
+        const computedStyle = window.getComputedStyle(el)
+
+        // Check if element is above the fold (visible in viewport)
+        const isAboveFold = rect.top < viewportHeight &&
+                           rect.bottom >= 0 &&
+                           rect.left < window.innerWidth &&
+                           rect.right >= 0
+
+        // Skip if not above fold or not visible
+        if (!isAboveFold || computedStyle.display === 'none' ||
+            computedStyle.visibility === 'hidden' ||
+            computedStyle.opacity === '0' ||
+            rect.width === 0 || rect.height === 0) {
+          return
+        }
+
+        // Collect selectors for CSS extraction
+        const tagName = el.tagName.toLowerCase()
+        allElements.add(tagName)
+
+        // Collect classes
+        if (el.className) {
+          Array.from(el.classList).forEach(cls => {
+            allClasses.add(cls)
+            // Also add combinations like 'div.classname'
+            allCombinations.add(`${tagName}.${cls}`)
+          })
+        }
+
+        // Collect IDs
+        if (el.id) {
+          allIds.add(el.id)
+          // Also add combinations like 'div#idname'
+          allCombinations.add(`${tagName}#${el.id}`)
+
+          // Add class+ID combinations
+          if (el.className) {
+            Array.from(el.classList).forEach(cls => {
+              allCombinations.add(`${tagName}#${el.id}.${cls}`)
+              allCombinations.add(`#${el.id}.${cls}`)
+            })
+          }
+        }
+
+        // Create multi-class combinations for elements with multiple classes
+        if (el.classList.length > 1) {
+          const classes = Array.from(el.classList)
+          for (let i = 0; i < classes.length; i++) {
+            for (let j = i + 1; j < classes.length; j++) {
+              allCombinations.add(`.${classes[i]}.${classes[j]}`)
+              allCombinations.add(`${tagName}.${classes[i]}.${classes[j]}`)
+            }
+          }
+        }
+
+        // Get element information for detailed response
+        const elementInfo = {
+          tagName: el.tagName.toLowerCase(),
+          id: el.id || null,
+          classes: el.className ? Array.from(el.classList) : [],
+          textContent: el.textContent ? el.textContent.trim().substring(0, 100) : null,
+          position: {
+            top: Math.round(rect.top),
+            left: Math.round(rect.left),
+            width: Math.round(rect.width),
+            height: Math.round(rect.height)
+          },
+          attributes: {},
+          styles: {}
+        }
+
+        // Get relevant attributes
+        const relevantAttrs = ['href', 'src', 'alt', 'title', 'role', 'aria-label']
+        relevantAttrs.forEach(attr => {
+          if (el.hasAttribute(attr)) {
+            elementInfo.attributes[attr] = el.getAttribute(attr)
+          }
+        })
+
+        // Get computed styles that affect visibility and layout
+        const relevantStyles = [
+          'display', 'position', 'fontSize', 'fontFamily', 'fontWeight',
+          'color', 'backgroundColor', 'border', 'margin', 'padding',
+          'zIndex', 'transform'
+        ]
+        relevantStyles.forEach(style => {
+          const value = computedStyle[style]
+          if (value && value !== 'auto' && value !== 'none' && value !== 'normal') {
+            elementInfo.styles[style] = value
+          }
+        })
+
+        // Generate a simple selector for the element
+        let selector = el.tagName.toLowerCase()
+        if (el.id) {
+          selector += `#${el.id}`
+        }
+        if (el.className) {
+          selector += `.${Array.from(el.classList).join('.')}`
+        }
+        elementInfo.selector = selector
+
+        elements.push(elementInfo)
+      })
+
+      // Sort elements by their position (top to bottom, left to right)
+      elements.sort((a, b) => {
+        if (Math.abs(a.position.top - b.position.top) < 10) {
+          return a.position.left - b.position.left
+        }
+        return a.position.top - b.position.top
+      })
+
+      return {
+        elements,
+        selectors: {
+          classes: Array.from(allClasses).sort(),
+          ids: Array.from(allIds).sort(),
+          elements: Array.from(allElements).sort(),
+          combinations: Array.from(allCombinations).sort()
+        }
+      }
+    }, { viewportHeight: height })
+
+    return aboveFoldElements
+  } finally {
+    await context.close()
+  }
+}
+
 // Extract critical CSS using Playwright
 async function extractCriticalCSS (url, css, options = {}) {
   const { width = 1200, height = 800, timeout = 30000 } = options
@@ -294,6 +462,82 @@ app.get('/health', (req, res) => {
     timestamp: new Date().toISOString(),
     browserReady: browser !== null
   })
+})
+
+// Endpoint to get elements above the fold
+app.post('/get-above-fold-elements', async (req, res) => {
+  try {
+    const { url, width = 1200, height = 800, timeout = 30000, includeDetails = false } = req.body
+
+    if (!url) {
+      return res.status(400).json({
+        error: 'URL is required',
+        message: 'Please provide a URL to analyze elements for'
+      })
+    }
+
+    console.log(`Getting above fold elements for: ${url}`)
+
+    // Ensure browser is available
+    if (!browser) {
+      await initializeBrowser()
+      if (!browser) {
+        throw new Error('Browser initialization failed')
+      }
+    }
+
+    // Extract elements above the fold
+    const result = await extractAboveFoldElements(url, {
+      width: parseInt(width),
+      height: parseInt(height),
+      timeout: parseInt(timeout)
+    })
+
+    const { elements, selectors } = result
+
+    console.log(`Found ${elements.length} elements above the fold for: ${url}`)
+
+    // Prepare response based on includeDetails flag
+    const response = {
+      success: true,
+      url,
+      viewport: { width: parseInt(width), height: parseInt(height) },
+      // New comprehensive selector information for extract_rules
+      wantedSelectors: selectors,
+      // Legacy support - just classes for backward compatibility
+      wantedClasses: selectors.classes,
+      stats: {
+        totalElements: elements.length,
+        totalClasses: selectors.classes.length,
+        totalIds: selectors.ids.length,
+        totalElementTypes: selectors.elements.length,
+        totalCombinations: selectors.combinations.length,
+        elementsByTag: elements.reduce((acc, el) => {
+          acc[el.tagName] = (acc[el.tagName] || 0) + 1
+          return acc
+        }, {}),
+        elementsWithText: elements.filter(el => el.textContent).length,
+        elementsWithClasses: elements.filter(el => el.classes.length > 0).length,
+        elementsWithIds: elements.filter(el => el.id).length
+      },
+      timestamp: new Date().toISOString()
+    }
+
+    // Include detailed element information only if requested
+    if (includeDetails) {
+      response.elements = elements
+    }
+
+    res.json(response)
+  } catch (error) {
+    console.error('Error getting above fold elements:', error)
+
+    res.status(500).json({
+      error: 'Failed to get above fold elements',
+      message: error.message,
+      timestamp: new Date().toISOString()
+    })
+  }
 })
 
 // Network diagnostic endpoint
