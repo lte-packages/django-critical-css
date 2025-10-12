@@ -65,6 +65,6 @@ pre-commit:  ## Run pre-commit hooks on all files
 build:  ## Build the package
 	$(PYTHON) -m build
 
-release:  ## Build and upload to PyPI (requires proper credentials)
-	$(PYTHON) -m build
-	$(PYTHON) -m twine upload dist/*
+# release:  ## Build and upload to PyPI (requires proper credentials)
+# 	$(PYTHON) -m build
+# 	$(PYTHON) -m twine upload dist/*
