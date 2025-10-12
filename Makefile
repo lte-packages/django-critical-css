@@ -59,7 +59,11 @@ clean:  ## Clean up build artifacts
 	find . -type d -name __pycache__ -delete
 	find . -type f -name "*.pyc" -delete
 
-pre-commit:  ## Run pre-commit hooks on all files
+pre-commit-install:  ## Ensure pre-commit is installed and run hooks on all files
+	$(PYTHON) -m pip install --quiet pre-commit
+	$(PYTHON) -m pre_commit install
+
+pre-commit: pre-commit-install ## Run pre-commit hooks on all files
 	$(PYTHON) -m pre_commit run --all-files
 
 build:  ## Build the package
