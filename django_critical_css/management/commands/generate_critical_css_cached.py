@@ -162,7 +162,7 @@ class Command(BaseCommand):
                     f"Processed: {processed}\n"
                     f"Skipped: {skipped}\n"
                     f"Errors: {errors}\n"
-                    f"Cache hits: {cache_hits}/{processed} ({cache_hits/processed*100 if processed > 0 else 0:.1f}%)"
+                    f"Cache hits: {cache_hits}/{processed} ({cache_hits / processed * 100 if processed > 0 else 0:.1f}%)"
                 )
             )
 

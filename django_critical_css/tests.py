@@ -76,10 +76,13 @@ class GenerateCriticalCSSCommandTest(TestCase):
 
     def create_temp_sitemap(self):
         """Create a temporary sitemap file and return its path"""
-        temp_file = tempfile.NamedTemporaryFile(mode="w", suffix=".xml", delete=False)
-        temp_file.write(self.sitemap_xml)
-        temp_file.close()
-        return temp_file.name
+        with tempfile.NamedTemporaryFile(
+            mode="w",
+            suffix=".xml",
+            delete=False,
+        ) as temp_file:
+            temp_file.write(self.sitemap_xml)
+            return temp_file.name
 
     def test_parse_sitemap_basic(self):
         """Test basic sitemap parsing functionality"""

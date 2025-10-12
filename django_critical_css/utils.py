@@ -40,28 +40,28 @@ def extract_rules(css_file, wanted_selectors):
     patterns = []
 
     # Class patterns
-    if "classes" in wanted_selectors and wanted_selectors["classes"]:
+    if wanted_selectors.get("classes"):
         for cls in wanted_selectors["classes"]:
             # Match .classname with word boundary or pseudo-selectors
             pattern = rf"\.{re.escape(cls)}(\b|:|::|$|\s|,|\+|~|>)"
             patterns.append(re.compile(pattern))
 
     # ID patterns
-    if "ids" in wanted_selectors and wanted_selectors["ids"]:
+    if wanted_selectors.get("ids"):
         for id_name in wanted_selectors["ids"]:
             # Match #idname with word boundary or pseudo-selectors
             pattern = rf"#{re.escape(id_name)}(\b|:|::|$|\s|,|\+|~|>)"
             patterns.append(re.compile(pattern))
 
     # Element patterns
-    if "elements" in wanted_selectors and wanted_selectors["elements"]:
+    if wanted_selectors.get("elements"):
         for element in wanted_selectors["elements"]:
             # Match element name at word boundaries
             pattern = rf"\b{re.escape(element)}" rf"(\b|:|::|$|\s|,|\+|~|>|\.|\[|#)"
             patterns.append(re.compile(pattern))
 
     # Exact combination patterns
-    if "combinations" in wanted_selectors and wanted_selectors["combinations"]:
+    if wanted_selectors.get("combinations"):
         for combination in wanted_selectors["combinations"]:
             # Escape the combination and match exactly
             escaped = re.escape(combination).replace(r"\ ", r"\s*")
@@ -79,10 +79,7 @@ def extract_rules(css_file, wanted_selectors):
 
         # Also include universal selectors and CSS resets that are critical
         critical_selectors = ["*", "html", "body", ":root"]
-        if any(critical in selector_text for critical in critical_selectors):
-            return True
-
-        return False
+        return any(critical in selector_text for critical in critical_selectors)
 
     def process_container(container):
         new_container = None
