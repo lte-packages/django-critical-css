@@ -1,0 +1,26 @@
+services:
+  critical-css-service:
+    build: .
+    ports:
+      - "3000:3000"
+    volumes:
+      # Mount a persistent volume for CSS cache
+      - css-cache:/tmp/css-cache
+      # Mount the cached server file
+      - ./server-cached.js:/app/server-cached.js:ro
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    # Override the default command to use the cached server
+    command: ["node", "server-cached.js"]
+
+volumes:
+  css-cache:
+    driver: local

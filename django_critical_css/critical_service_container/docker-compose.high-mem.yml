@@ -1,0 +1,44 @@
+version: '3.8'
+
+# High-memory configuration for systems with Browser initialization issues
+services:
+  critical-css-service:
+    build: .
+    container_name: critical-css-service-high-mem
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+    restart: unless-stopped
+    # High memory allocation
+    mem_limit: 4g
+    memswap_limit: 4g
+    shm_size: 2g
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3000/health', (res) => { process.exit(res.statusCode === 200 ? 0 : 1) }).on('error', () => process.exit(1))"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 4G
+        reservations:
+          cpus: '1.0'
+          memory: 2G
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - SYS_ADMIN  # Required for Chromium
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=500m
+      - /dev/shm:rw,nosuid,nodev,noexec,size=2g
+    ulimits:
+      nofile:
+        soft: 65536
+        hard: 65536
